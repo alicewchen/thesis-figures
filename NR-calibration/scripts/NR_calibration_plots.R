@@ -95,24 +95,7 @@ library(ggpubr)
 library(ggpmisc)
 library(ltxplot)
 load_theme_ltx()
-###### 
-y_axes = c("mean_logPEA",
-           "mean_logPEA_adjusted",
-           "ratio_logPEA_to_blank")
-y_labels = c("Mean log NR fluorescence",
-             "Mean log NR fluorescence adjusted",
-             "log NR fluorescence:Blank")
-             
-y_axes = c("mean_PE_A",
-           "mean_PEA_adjusted",
-           "ratio_PEA_to_blank")
-y_labels = c("Mean NR fluorescence", 
-             "Mean log NR fluorescence".
-             "NR fluorescence:Blank")
-x_axes = c("percent_neutral_lipids_of_dry_mass", 
-           "ug_neutral_lipids_per_million_cells",
-           "mass_per_million_cells_ug"  )
-##### 
+
 p1 <- df %>% 
   ggscatter(data = . , y = "mean_PE_A", x = "percent_neutral_lipids_of_dry_mass", 
             shape = "Strain",
