@@ -7,6 +7,9 @@ library(ggplot2)
 library(scales)
 library(ggtext)
 library(ltxplot)
+library(ggpubr)
+library(lme4)
+library(car)
 load_theme_ltx()
 ############################
 # Create well to Strain key#
@@ -134,7 +137,7 @@ tukey_output <- cld(marginal,
 write.table(tukey_output,"../analysis/aov_tukey_whole_model.txt", sep="\t", quote = FALSE)
 
 #====================================================================
-#Plot mean and se as error bars
+# Figure 4A: Variation of NR fluorescence among strains
 #====================================================================
 
 df <- mean_PEA %>% group_by(Strain,N_Starvation) %>% 
@@ -160,10 +163,10 @@ color_by_region<-as.character(df$Color[1:26])
 p<-ggplot(data = df,aes( y = mean, x = factor(Strain, levels = df$Strain[1:26]))) + 
   geom_point(size = 1, aes(color = N_Starvation)) +
   geom_errorbar(aes(ymin = min, ymax = max, 
-                    color = N_Starvation), width = 0, size = 0.5) +
+                    color = N_Starvation), width = 0, size = 0.4) +
   xlab("Strains") +
-  ylab("Mean NR fluorescence") +
-  labs(colour = "N Starvation") +
+  ylab("NR fluorescence") +
+  labs(colour = "N-starvation") +
   #scale_color_manual(values=c("#9E4338", "#3B6C9D"), labels=c("Before","After"))+
   scale_y_log10(breaks = trans_breaks("log10", function(x) 10^x),
                 labels = trans_format("log10", math_format(10^.x))) +
@@ -182,34 +185,36 @@ p
 dev.off() 
 
 #===================================================================
-# Default dataframe: Effect of Latitude on mean PE A
-#     Look at Before and After N Starvation Treatments independently
+# Effect of Latitude on mean NR fluorescence
 #====================================================================
-library(dplyr)
-library(ggplot2)
-library(scales)
-library(ggpubr)
-library(lme4)
-library(car)
-
-#Fixed effects model
+# Fixed effects model ####
+sink("../analysis/lm_model_output.txt", type = "output")
 lm<-latitude_df %>% 
   lm(log10(mean_PE_A)~Latitude*N_Starvation,data =.)
 summary(lm)
-plot(lm)
-hist(resid(lm))
 latitude.aov<- Anova(lm, type = 2)
 latitude.aov
-#plot(latitude.aov)
+sink(NULL)
 
-#Mixed effects models
+pdf("../analysis/LatxStarvation_lm_plots.pdf", height = 7.5, width = 11)
+par(mfrow=c(2,3))
+plot(lm)
+hist(resid(lm))
+dev.off() 
+
+# Mixed effects models #####
+sink("../analysis/lmer_model_output.txt", type = "output")
 lm<-latitude_df %>% #filter(Strain!="GB117")%>% 
   lmer(log10(mean_PE_A)~Latitude*N_Starvation+(1|Strain),data =.)
 summary(lm)
-plot(lm)
-hist(resid(lm), breaks = 15)
 latitude.aov<- Anova(lm,type = 2)
 latitude.aov
+sink(NULL)
+pdf("../analysis/LatxStarvation_lmer_plots.pdf", height = 7.5, width = 11)
+par(mfrow=c(1,1))
+plot(lm)
+hist(resid(lm), breaks = 15)
+dev.off() 
 
 p1 <- latitude_df %>% filter(N_Starvation == "Before") %>%
   # filter(Strain!="GB117")%>%
@@ -252,18 +257,147 @@ p2
 P2 <- ggarrange(p1, p2,labels = c("A","B"),
                 ncol = 2, nrow = 1)
 P2
-#-----------------
-#Plot N starvations together
-#-----------------
+
+# Resampling ####
+library(purrr)
+library(broom)
+set.seed(1)
+#Function for random stratified resampling (balanced)
+strain_key<-strain.to.region %>% #filter(Strain!="GB117") %>% 
+  dplyr::select(Strain, Latitude)
+resampling <- function (df, nruns){
+  output<-list()
+  for (i in 1:nruns){
+    set.seed(i)
+    sample <- strain_key %>% group_by(Latitude) %>% sample_n(., 1)
+    sample <- df %>% right_join(.,sample, by=c("Strain", "Latitude"))
+    output <- append(output,list(sample))  
+  }
+  return(output)
+}
+
+#Function for running lm on each sample
+run_lm <- function(x) {
+  mod <- lm(log10(mean_PE_A) ~ Latitude+N_Starvation, x)
+  r_sq<-summary(mod)$r.squared
+  tibble <- as.data.frame(t(broom::tidy(mod)))[2,]
+  tibble<-cbind(tibble,r_sq)
+  colnames(tibble)<- c(as.data.frame(broom::tidy(mod))[,1], "R squared")
+  return(tibble)
+} 
+
+run_lm_interaction <- function(x) {
+  mod <- lm(log10(mean_PE_A) ~ Latitude*N_Starvation, x)
+  tibble <- as.data.frame(t(broom::tidy(mod)))[2,]
+  colnames(tibble)<- as.data.frame(broom::tidy(mod))[,1]
+  return(tibble)
+} 
+
+to_numeric <- function(x){
+  y<- lapply(x, as.character)
+  y <- lapply(y, as.numeric)
+  y<- as.data.frame(y)
+  return(y)
+}
+#test
+sample <- strain_key %>% group_by(Latitude) %>% sample_n(., 1)
+sample <- latitude_df %>% #filter(Strain!="GB117") %>% 
+  right_join(.,sample, by=c("Strain", "Latitude"))
+
+mod <- lm(log10(mean_PE_A) ~ Latitude+N_Starvation, sample)
+print(t(broom::tidy(mod)))
+summary(mod)
+tibble <- as.data.frame(t(broom::tidy(mod)))[2,]
+colnames(tibble) <-c(as.data.frame(broom::tidy(mod))[,1])
+print(tibble)
+#end of test
+
+resample <- latitude_df %>% #filter(Strain!="GB117") %>%
+  resampling(.,10000)
+output <- to_numeric(map_df(resample[1:1000], run_lm))
+output2 <- to_numeric(map_df(resample[1:1000], run_lm_interaction))
+#utput3 <- map_df(resample[1:100], run_lm)
+#names(output)<- col_names
+
+#create summary of mean, std, CI for simulation statistics
+resample_summary <- function (df){
+  # for (i in 1:ncol(df)){
+  #   df[,i] <- as.numeric(df[,i])
+  # }
+  col_names <- names(df)
+  mean<-sapply(df, mean, na.rm=TRUE)
+  std<-sapply(df, sd, na.rm=TRUE)
+  lower_CI<-sapply(df,function (x) {quantile(x,.025)})
+  upper_CI<-sapply(df,function (x) {quantile(x,.975)})
+  p_value <- 2*pnorm(-abs((0-mean)/std))
+  output_summary <- as.data.frame(cbind(mean, std, lower_CI, upper_CI, p_value))
+  rownames(output_summary)<-col_names
+  return(output_summary)
+}
+
+output_sum <- resample_summary(output)
+output2_sum <- resample_summary(output2)
+
+#Extract slope and intercept for Before/After of each resample
+count = 0
+merged_resamples <- data.frame(matrix(ncol = 9, nrow = 0))
+for (i in resample[1:1000]) {
+  count <- count + 1
+  i<-cbind(i, count)
+  merged_resamples <- rbind(merged_resamples, i)
+}
+
+# Plot histogram of slopes ####
+p1<-ggplot(output2, aes(x=`Latitude.N_StarvationAfter`)) + 
+  geom_histogram(color="black", fill="white", bins=15)+
+  xlab("Slope estimate") +
+  ylab("Frequency") +
+  ggtitle("Latitude*N Starvation")+
+  theme_classic(base_size = 14) +
+  theme(plot.title = element_text(size = 14),
+        axis.text = element_text(colour = "black", size = 14))
+#shapiro.test(output2$`Latitude:N_StarvationAfter`)
+p2<-ggplot(output2, aes(x=Latitude)) + 
+  # geom_histogram(color="black", fill="white", bins=15)+
+  # geom_density(aes(x=Latitude,
+  #                  y=..density.., fill = "grey", alpha = 0.2)) +
+  geom_histogram(color="black", fill="white", bins=15)+
+  xlab("Slope estimate") +
+  ylab("Frequency") +
+  ggtitle("Latitude")+
+  theme_classic(base_size = 14) +
+  theme(plot.title = element_text(size = 14),
+        axis.text = element_text(colour = "black", size = 14))
+
+p3<-ggplot(output2, aes(x=N_StarvationAfter)) + 
+  # geom_histogram(color="black", fill="white", bins=15)+
+  # geom_density(aes(x=N_StarvationAfter,
+  #                  y=..density.., fill = "grey", alpha = 0.2)) +
+  geom_histogram(color="black", fill="white", bins=15)+
+  #scale_x_continuous(labels = unit_format(unit = "K", scale = 0.001)) +
+  xlab("Slope estimate") +
+  ylab("Frequency") +
+  ggtitle("N Starvation")+
+  theme_classic(base_size = 14) +
+  theme(plot.title = element_text(size = 14),
+        axis.text = element_text(colour = "black", size = 14))
+
+P3 <- ggarrange(p1,p2,p3,labels=c("A","B","C"), nrow = 2, ncol = 2)
+P3
+
+#===============================================================================
+# Figure 5A: NR fluorescence across strains grouped by N-starvation treatment
+#===============================================================================
 p1 <- latitude_df %>% 
   ggplot(., aes( y = mean_PE_A, x = Latitude)) +
   geom_point(size = 2, alpha = 0.2,
              aes(colour = N_Starvation)) +
   #scale_color_manual(values = c("#9E4338","#3B6C9D"), labels=c("Before","After")) +
-  geom_smooth(method = "lm", se=F, aes(color = N_Starvation)) +
-  ylab("NR fluorescence") +
-  xlab(expression("Latitude ("*degree*"N)"))+
-  labs(color = "N Starvation") +
+  geom_smooth(method = "lm", se=F, aes(color = N_Starvation),size = 0.5) +
+  labs(x = expression("Latitude ("*degree*"N)"),
+       y = "NR fluorescence",
+       color = "N-starvation",
+       tag = "A") +
   scale_y_log10(breaks = trans_breaks("log10", function(x) 10^x),
                 labels = trans_format("log10", math_format(10^.x)))+
   #annotate("text", x = 28, y = 10^6, hjust = 0,
@@ -272,10 +406,31 @@ p1 <- latitude_df %>%
   theme_latex(base_size = 12) +
   theme(axis.text = element_text(colour = "black"),
         panel.grid.major.x = element_blank(),
-        panel.grid.major.y = element_blank())
-p1
+        panel.grid.major.y = element_blank(),
+        plot.tag = element_text(face = 'bold'))
 
-pdf("../analysis/NR fluorescence across latitudes.pdf", height = 4, width = 3.5)
-p1
+#===============================================================================
+# Figure 5B: NR fluorescence across strains grouped by N-starvation treatment
+#===============================================================================
+p<- ggplot(merged_resamples, 
+       aes(y = mean_PE_A, x = Latitude, color = N_Starvation,
+           group = interaction(N_Starvation, count))) +
+  geom_line(stat="smooth",method = "lm", formula = y ~x, alpha = 0.01, se = TRUE) +
+  #scale_color_manual(values = c("#D55E00", "#0072B2"), labels=c("Before","After"), ) +
+  scale_y_log10(breaks = trans_breaks("log10", function(x) 10^x),
+                labels = trans_format("log10", math_format(10^.x))) +
+  labs(x = expression("Latitude ("*degree*"N)"),
+       y = "NR fluorescence",
+       color = "N-starvation",
+       tag = "B") +
+  theme_latex(base_size = 12) +
+  theme(axis.text = element_text(colour = "black"),
+        panel.grid.major.x = element_blank(),
+        panel.grid.major.y = element_blank(),
+        plot.tag = element_text(face = 'bold'))
+
+
+P3 <- ggarrange(p1,p,nrow = 1, ncol = 2, common.legend = T)
+pdf("../analysis/NR fluorescence across latitudes bootstrap.pdf", height = 3.5, width = 6.5)
+P3
 dev.off() 
-
