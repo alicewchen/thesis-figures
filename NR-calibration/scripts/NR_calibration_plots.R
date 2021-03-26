@@ -6,6 +6,7 @@ library(dplyr)
 library(ggplot2)
 library(scales)
 library(ggpubr)
+library(gridExtra)
 library(ggpmisc)
 library(ltxplot)
 load_theme_ltx()
@@ -300,3 +301,165 @@ P8 <- ggarrange(p1, p2, p3,p4,p5, p6, p7, p8,
 pdf("../analysis/mean_logPEA_all.pdf", height = 9, width = 6.5)
 P8
 dev.off()
+
+#==============================
+# Appendix
+#==============================
+#Figure S6: NR vs FSC  colored by neutral lipid content, size by dry mass ####
+p1 <- ggplot(data = df, aes(y = mean_PE_A,
+                            x = mean_FSC)) +
+  geom_point(aes(colour = ug_neutral_lipids_per_million_cells, 
+                 shape = Strain, 
+                 size = mass_per_million_cells_ug)) +
+  scale_color_gradient(high = "#E69F00", low = "#56B4E9", 
+                       name = expression(atop("Neutral lipids", paste("(", mu, "g ",10^-6," cells)")))) +
+  labs(x = "Cell size (FSC-A)",
+       y = "NR fluorescence",
+       size = expression(atop("dry mass",paste("(",mu, "g ",10^-6," cells)"))),
+       tag = "A") +
+  scale_x_continuous(labels = unit_format(unit = "K", scale = 0.001),
+                     limits = c(0,500000)) +#,
+                     #breaks = c(20000,60000,100000,140000)) +
+  scale_y_continuous(labels = unit_format(unit = "K", scale = 10^-3),
+                     limits = c(0,200000)) +
+  guides(shape=FALSE, size = FALSE) + 
+  theme_latex(base_size = 10) +
+  theme(axis.text = element_text(colour = "black"), 
+        panel.grid.major.x = element_blank(),
+        panel.grid.major.y = element_blank(),
+        plot.tag = element_text(face = 'bold'),
+        legend.position = "top",
+        legend.text=element_text(size=10),
+        legend.margin=margin(t = 0,l= 0, unit='cm'),
+        plot.margin = margin(r = 10,b=10, unit = 'pt'))
+
+p2<-ggplot(data = df, aes(y = mean_PE_A,
+                          x = mean_FSC))+
+  geom_point(aes(colour = percent_neutral_lipids_of_dry_mass, 
+                 shape = Strain,
+                 size = mass_per_million_cells_ug)) +
+  scale_color_gradient(high = "#D55E00", low = "#0072B2", 
+                       name =  "Neutral lipids\n(% dry mass)") +
+  labs(x = "Cell size (FSC-A)",
+       y = "NR fluorescence",
+       size = expression(atop("dry mass",paste("(",mu, "g ",10^-6," cells)"))),
+       tag = "B") +
+  scale_x_continuous(labels = unit_format(unit = "K", scale = 0.001),
+                     limits = c(0,500000)) + #,
+                     #breaks = c(20000,60000,100000,140000)) +
+  scale_y_continuous(labels = unit_format(unit = "K", scale = 10^-3),
+                     limits = c(0,200000))+
+  guides(shape=FALSE, size = FALSE) + 
+  theme_latex(base_size = 10) +
+  theme(axis.text = element_text(colour = "black"), 
+        panel.grid.major.x = element_blank(),
+        panel.grid.major.y = element_blank(),
+        plot.tag = element_text(face = 'bold'),
+        legend.position = "top",
+        legend.text=element_text(size=10),
+        legend.margin=margin(t = 0,l= 0, unit ='pt'),
+        plot.margin = margin(r = 10,b=10, unit = 'pt'))
+  #ggtitle(" \n ")
+p_empty<- ggplot(data = df, aes(y = mean_PE_A,
+                                x = mean_FSC))+
+  geom_point(aes(colour = percent_neutral_lipids_of_dry_mass, 
+                 shape = Strain,
+                 size = mass_per_million_cells_ug)) +
+  scale_color_gradient(#high = "green", low = "blue", 
+                       name =  "Neutral lipids\n(% dry mass)") +
+  labs(x = "Cell size (FSC-A)",
+       y = "NR fluorescence",
+       size = expression(atop("dry mass",paste("(",mu, "g ",10^-6," cells)")))) +
+  scale_x_continuous(labels = unit_format(unit = "K", scale = 0.001)) +#,
+                     #breaks = c(20000,60000,100000,140000)) +
+  scale_y_continuous(labels = unit_format(unit = "K", scale = 10^-3))+
+  guides(colour = FALSE) + 
+  theme_latex(base_size = 10) +
+  theme(axis.text = element_text(colour = "black"), 
+        panel.grid.major.x = element_blank(),
+        panel.grid.major.y = element_blank(),
+        plot.tag = element_text(face = 'bold'),
+        legend.position = "top",
+        legend.text=element_text(size=10),
+        legend.margin=margin(t = 0, l= 0, unit='cm'))
+
+pdf("../analysis/Appendix FigS6.pdf", height = 6, width = 6.5)
+lay <- rbind(c(1,2),
+             c(3,3))
+grid.arrange(p1, p2, p_empty, layout_matrix = lay)
+#remove p_empty when taking screenshot
+dev.off()
+
+#Figure S7: PCA ####
+PCA_data <- df %>%
+  select(percent_neutral_lipids_of_dry_mass, ug_neutral_lipids_per_million_cells,mass_per_million_cells_ug, mean_FSC)
+
+pca <- prcomp(PCA_data, scale = TRUE)
+pca
+summary(pca)
+plot(pca)
+
+PC1 <- pca[["x"]][,1]
+PC2 <- pca[["x"]][,2]
+
+df_temp <- df %>% cbind(., PC1,PC2)
+
+pcplot1 <- ggscatter(data = df_temp , y = "PC2", x = "PC1", 
+                     shape = "Strain",
+                     conf.int = FALSE) +
+  geom_point(aes(shape = Strain, size = mean_FSC, color = percent_neutral_lipids_of_dry_mass)) +
+  scale_color_gradient(high = "green", low = "blue", 
+                       name =  "Neutral lipid content\n(% dry mass)") +
+  xlab("PC1") +
+  ylab("PC2") +
+  xlim(-2.5,4) +
+  ylim(-2.5,2.5) +
+  theme_classic(base_size = 10) +
+  theme(axis.text = element_text(colour = "black")) +
+  ggtitle(" ")
+
+pcplot2 <- ggscatter(data = df_temp , y = "PC2", x = "PC1", 
+                     shape = "Strain",
+                     conf.int = FALSE) +
+  geom_point(aes(shape = Strain, size = mass_per_million_cells_ug , color = ug_neutral_lipids_per_million_cells )) +
+  scale_color_gradient(high = "red", low = "blue", 
+                       name =  "Neutral lipid content\n(ng/cell)") +
+  xlab("PC1") +
+  ylab("PC2") +
+  xlim(-2.5,4) +
+  ylim(-2.5,2.5) +
+  theme_classic(base_size = 10) +
+  theme( axis.text = element_text( colour = "black")) +
+  ggtitle(" ")
+
+P2 <- ggarrange(pcplot1,pcplot2, labels = c("A","B"), ncol = 2, nrow = 1)
+P2
+
+pdf("../analysis/PCA_coloured.pdf", height = 4, width = 9.5)
+ggarrange(pcplot1,pcplot2, labels = c("A","B"), ncol = 2, nrow = 1, legend = "right" )
+dev.off()
+
+pcplot3 <- ggscatter(data = df_temp , y = "PC2", x = "PC1",
+                     shape = "Strain",
+                     color= "N_starvation",
+                     size = 4,
+                     conf.int = FALSE) +
+  geom_point(aes(shape = Strain, color = N_starvation)) +
+  #scale_color_manual(labels=c("Before","After")) +
+  labs(x = "PC1 (83.11%)",
+       y = "PC2 (16.16%)",
+       color = "N-starvation") +
+  xlim(-2.5,4) +
+  ylim(-2.5,2.5) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "black") +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "black")   +
+  theme_latex(base_size = 12) +
+  theme(axis.text = element_text(colour = "black"), 
+        panel.grid.major.x = element_blank(),
+        panel.grid.major.y = element_blank(),
+        plot.tag = element_text(face = 'bold'),
+        legend.position = "right")
+pdf("../analysis/Appendix FigS7.pdf", height = 5, width = 6.5)
+pcplot3
+dev.off()
+
