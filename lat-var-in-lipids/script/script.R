@@ -314,8 +314,8 @@ print(tibble)
 
 resample <- latitude_df %>% #filter(Strain!="GB117") %>%
   resampling(.,10000)
-output <- to_numeric(map_df(resample[1:1000], run_lm))
-output2 <- to_numeric(map_df(resample[1:1000], run_lm_interaction))
+output <- to_numeric(map_df(resample[1:10000], run_lm))
+output2 <- to_numeric(map_df(resample[1:10000], run_lm_interaction))
 #utput3 <- map_df(resample[1:100], run_lm)
 #names(output)<- col_names
 
@@ -330,7 +330,9 @@ resample_summary <- function (df){
   lower_CI<-sapply(df,function (x) {quantile(x,.025)})
   upper_CI<-sapply(df,function (x) {quantile(x,.975)})
   p_value <- 2*pnorm(-abs((0-mean)/std))
-  output_summary <- as.data.frame(cbind(mean, std, lower_CI, upper_CI, p_value))
+  more_than <- sapply(df, function(x){sum(x>0)})
+  less_than <- sapply(df, function(x){sum(x<0)})
+  output_summary <- as.data.frame(cbind(mean, std, lower_CI, upper_CI, p_value, more_than, less_than))
   rownames(output_summary)<-col_names
   return(output_summary)
 }
@@ -341,7 +343,7 @@ output2_sum <- resample_summary(output2)
 #Extract slope and intercept for Before/After of each resample
 count = 0
 merged_resamples <- data.frame(matrix(ncol = 9, nrow = 0))
-for (i in resample[1:1000]) {
+for (i in resample[1:10000]) {
   count <- count + 1
   i<-cbind(i, count)
   merged_resamples <- rbind(merged_resamples, i)
