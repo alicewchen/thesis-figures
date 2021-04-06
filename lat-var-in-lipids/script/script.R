@@ -355,21 +355,32 @@ p1<-ggplot(output2, aes(x=`Latitude.N_StarvationAfter`)) +
   xlab("Slope estimate") +
   ylab("Frequency") +
   ggtitle("Latitude*N Starvation")+
-  theme_classic(base_size = 14) +
-  theme(plot.title = element_text(size = 14),
-        axis.text = element_text(colour = "black", size = 14))
+  theme_latex(base_size = 12) +
+  theme(axis.text = element_text(colour = "black"),
+        panel.grid.major.x = element_blank(),
+        panel.grid.major.y = element_blank(),
+        plot.tag = element_text(face = 'bold'))
+
 #shapiro.test(output2$`Latitude:N_StarvationAfter`)
 p2<-ggplot(output2, aes(x=Latitude)) + 
   # geom_histogram(color="black", fill="white", bins=15)+
-  # geom_density(aes(x=Latitude,
-  #                  y=..density.., fill = "grey", alpha = 0.2)) +
+  #geom_density(aes(x=Latitude,
+  #                  y=..density.., alpha = 0.2)) +
   geom_histogram(color="black", fill="white", bins=15)+
+  geom_vline(aes(xintercept=output2_sum[["Latitude","mean"]], linetype="dashed",
+                 colour = "blue"))+
   xlab("Slope estimate") +
-  ylab("Frequency") +
+  ylab("Count") +
   ggtitle("Latitude")+
-  theme_classic(base_size = 14) +
-  theme(plot.title = element_text(size = 14),
-        axis.text = element_text(colour = "black", size = 14))
+  theme_latex(base_size = 12) +
+  theme(axis.text = element_text(colour = "black"),
+        panel.grid.major.x = element_blank(),
+        panel.grid.major.y = element_blank(),
+        plot.tag = element_text(face = 'bold'),
+        legend.position = "none")
+pdf("../analysis/histogram of latitude slopes.pdf", height = 4, width = 6.5)
+p2
+dev.off() 
 
 p3<-ggplot(output2, aes(x=N_StarvationAfter)) + 
   # geom_histogram(color="black", fill="white", bins=15)+
@@ -380,9 +391,11 @@ p3<-ggplot(output2, aes(x=N_StarvationAfter)) +
   xlab("Slope estimate") +
   ylab("Frequency") +
   ggtitle("N Starvation")+
-  theme_classic(base_size = 14) +
-  theme(plot.title = element_text(size = 14),
-        axis.text = element_text(colour = "black", size = 14))
+  theme_latex(base_size = 12) +
+  theme(axis.text = element_text(colour = "black"),
+        panel.grid.major.x = element_blank(),
+        panel.grid.major.y = element_blank(),
+        plot.tag = element_text(face = 'bold'))
 
 P3 <- ggarrange(p1,p2,p3,labels=c("A","B","C"), nrow = 2, ncol = 2)
 P3
