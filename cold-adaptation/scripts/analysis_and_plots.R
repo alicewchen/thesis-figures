@@ -7,13 +7,13 @@ library(scales)
 library(gridExtra)
 library(MuMIn)
 library(car)
+library(lme4)
 load_theme_ltx()
 
 #=======================
 # Data manipulation
 #=======================
 # Extract fluorescence data from gated .fcs files ####
-#mean_PEA <- fcs_to_mean_PEA('../data/raw/fcs', '../data/clean/mean_PEA.txt')
 mean_PEA <- fcs_to_mean_logPEA('../data/raw/fcs', '../data/clean/mean_logPEA.txt')
 
 # Merge mean_PEA with treatment information using old clean dataframe ####
@@ -55,8 +55,8 @@ df <- read.table("../data/raw/Data.csv", sep = ",", header = TRUE) %>%
       Latitude == "45.3" ~ "N",
       Latitude == "45.4" ~ "N",
       Latitude == "28.1" ~ "S"
-      )))
-
+      ))) %>%
+  mutate(N_S = as.factor(ordered(N_S, c("S","N"))))
 
 # Make a copy of dataframe without the outlier ####
 clean <- df %>% filter(!(mean_PE_A >= 58625))
@@ -72,16 +72,15 @@ aov
 
 
 # Linear model including all two-way interactions (with outlier)####
-model <- lmer(mean_PE_A ~ 
+sink(file = "../analysis/all_interactions_with_outlier.txt")
+model <- lm(mean_PE_A ~ 
                 Latitude*Light+ 
                 Latitude*Timepoint+ 
                 Latitude*Temperature + 
                 Temperature*Timepoint +  
                 Temperature*Light+ 
-                Timepoint*Light+
-                (1|Strain), data = df)
+                Timepoint*Light, data = df)
 aov<- Anova(model, test="F", type="III")
-sink(file = "../analysis/all_interactions_with_outlier.txt")
 summary(model)
 aov
 sink(file = NULL)
@@ -93,16 +92,15 @@ hist(resid(model))
 dev.off()
 
 # Linear model including all two-way interactions (without outlier) ####
-model <- lmer(mean_PE_A ~ 
-                Latitude*Light+ 
-                Latitude*Timepoint+ 
-                Latitude*Temperature + 
-                Temperature*Timepoint +  
-                Temperature*Light+ 
-                Timepoint*Light+
-                (1|Strain), data = clean)
-aov<- anova(model)
 sink(file = "../analysis/all_interactions_no_outlier.txt")
+model <- lm(mean_PE_A ~ 
+              Latitude*Light+ 
+              Latitude*Timepoint+ 
+              Latitude*Temperature + 
+              Temperature*Timepoint +  
+              Temperature*Light+ 
+              Timepoint*Light, data = clean)
+aov<- Anova(model, test="F", type="III")
 summary(model)
 aov
 sink(file = NULL)
@@ -112,6 +110,37 @@ qqnorm(resid(model))
 qqline(resid(model))
 hist(resid(model))
 dev.off()
+
+# Linear model including all two-way interactions (with outlier); exclude one strain ####
+sink(file = "../analysis/no_3064.txt")
+model <- df %>% 
+  filter(Strain != "3064") %>%
+  lm(mean_PE_A ~ Latitude + Temperature+ Light + 
+       Latitude*Light+ 
+       Latitude*Timepoint+ 
+       Latitude*Temperature + 
+       Temperature*Timepoint +  
+       Temperature*Light+ 
+       Timepoint*Light, data = .)
+aov<- aov(model)
+summary(model)
+summary(aov)
+sink(file = NULL)
+
+sink(file = "../analysis/no_3082.txt")
+model <- df %>% 
+  filter(Strain != "3082") %>%
+  lm(mean_PE_A ~ Latitude + Temperature+ Light + 
+       Latitude*Light+ 
+       Latitude*Timepoint+ 
+       Latitude*Temperature + 
+       Temperature*Timepoint +  
+       Temperature*Light+ 
+       Timepoint*Light, data = .)
+aov<- aov(model)
+summary(model)
+summary(aov)
+sink(file = NULL)
 
 ######
 # Plots
