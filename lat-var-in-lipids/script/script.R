@@ -137,9 +137,48 @@ tukey_output <- cld(marginal,
 write.table(tukey_output,"../analysis/aov_tukey_whole_model.txt", sep="\t", quote = FALSE)
 
 #====================================================================
-# Figure 4A: Variation of NR fluorescence among strains
+# Figure 4 and S: Variation of NR fluorescence among strains
 #====================================================================
+model <- readRDS("../../NR-calibration/data/clean/model.rds")
+predicted_NL<- latitude_df %>% mutate(predicted_NL = predict(model, newdata = .))
+df <- predicted_NL %>% group_by(Strain,N_Starvation) %>% 
+  summarise( mean = mean(predicted_NL), 
+             se = sd(predicted_NL)/sqrt(n()), 
+             max = mean+se, 
+             min = mean - se) %>%
+  mutate(mean = case_when(mean <= 0 ~0,
+                          TRUE ~ mean),
+         min = case_when( min <= 0 ~ 0,
+                          TRUE ~ min),
+         max = case_when(max<=0 ~ 0,
+                         TRUE ~ max)
+         ) %>%
+  left_join(.,strain.to.region) %>% 
+  na.omit(.) %>%  droplevels() %>%
+  arrange(., N_Starvation, mean,Strain)
 
+vjust<-rep(0.5)
+df$group<-gsub(" ", "", tukey_output$.group)
+
+color_by_region<-as.character(df$Color[1:26])  
+
+p<-ggplot(data = df,aes( y = mean, x = factor(Strain, levels = df$Strain[1:26]))) + 
+  geom_point(size = 1, aes(color = N_Starvation)) +
+  geom_errorbar(aes(ymin = min, ymax = max, 
+                    color = N_Starvation), width = 0, size = 0.4) +
+  labs(x = "Strains",
+       y=expression( paste("Neutral lipid (", mu, "g ",10^-6," cells)")),
+       color = "N-starvation") +
+  theme_latex(base_size = 12) +
+  theme(legend.position="top",
+        axis.text.x = element_markdown(angle = 45, size =12, vjust = 1, hjust=1, 
+                                       color= color_by_region),
+        panel.grid.major.x = element_blank(),
+        panel.grid.major.y = element_blank())
+pdf("../analysis/NL of all strains.pdf", height = 4, width = 6.5)
+p
+dev.off() 
+# Supplemental figure ####
 df <- mean_PEA %>% group_by(Strain,N_Starvation) %>% 
   summarise( mean = mean(log10(mean_PE_A)), 
              se = sd(log10(mean_PE_A))/sqrt(n()), 
@@ -155,24 +194,15 @@ df <- mean_PEA %>% group_by(Strain,N_Starvation) %>%
   na.omit(.) %>%  droplevels() %>%
   arrange(., N_Starvation, mean,Strain)
 
-vjust<-rep(0.5)
-df$group<-gsub(" ", "", tukey_output$.group)
-
-color_by_region<-as.character(df$Color[1:26])  
-
 p<-ggplot(data = df,aes( y = mean, x = factor(Strain, levels = df$Strain[1:26]))) + 
   geom_point(size = 1, aes(color = N_Starvation)) +
   geom_errorbar(aes(ymin = min, ymax = max, 
                     color = N_Starvation), width = 0, size = 0.4) +
-  xlab("Strains") +
-  ylab("NR fluorescence") +
-  labs(colour = "N-starvation") +
-  #scale_color_manual(values=c("#9E4338", "#3B6C9D"), labels=c("Before","After"))+
+  labs(x = "Strains",
+       y="NR fluorescence",
+       color = "N-starvation") +
   scale_y_log10(breaks = trans_breaks("log10", function(x) 10^x),
                 labels = trans_format("log10", math_format(10^.x))) +
-  #limits = c(10000, 10^6)) +
-  # geom_text(hjust = -0.5,vjust=0.25,
-  #           color   = "black") +
   theme_latex(base_size = 12) +
   theme(legend.position="top",
         axis.text.x = element_markdown(angle = 45, size =12, vjust = 1, hjust=1, 
@@ -299,7 +329,7 @@ to_numeric <- function(x){
   y<- as.data.frame(y)
   return(y)
 }
-#test
+#test ####
 sample <- strain_key %>% group_by(Latitude) %>% sample_n(., 1)
 sample <- latitude_df %>% #filter(Strain!="GB117") %>% 
   right_join(.,sample, by=c("Strain", "Latitude"))
@@ -310,7 +340,7 @@ summary(mod)
 tibble <- as.data.frame(t(broom::tidy(mod)))[2,]
 colnames(tibble) <-c(as.data.frame(broom::tidy(mod))[,1])
 print(tibble)
-#end of test
+#end of test --------------
 
 resample <- latitude_df %>% #filter(Strain!="GB117") %>%
   resampling(.,10000)
@@ -401,13 +431,18 @@ P3 <- ggarrange(p1,p2,p3,labels=c("A","B","C"), nrow = 2, ncol = 2)
 P3
 
 #===============================================================================
-# Figure 5A: NR fluorescence across strains grouped by N-starvation treatment
+# Figure 5A: NR fluorescence across Latitudes grouped by N-starvation treatment
 #===============================================================================
+predict_df <- latitude_df %>% cbind(., predicted_NL) %>%
+  mutate(compressed_predicted_NL = case_when( #compress negative NL values to 0
+    predicted_NL< 0 ~ 0,
+    predicted_NL >= 0 ~ predicted_NL
+  ))
+
 p1 <- latitude_df %>% 
   ggplot(., aes( y = mean_PE_A, x = Latitude)) +
   geom_point(size = 2, alpha = 0.2,
              aes(colour = N_Starvation)) +
-  #scale_color_manual(values = c("#9E4338","#3B6C9D"), labels=c("Before","After")) +
   geom_smooth(method = "lm", se=F, aes(color = N_Starvation),size = 0.5) +
   labs(x = expression("Latitude ("*degree*"N)"),
        y = "NR fluorescence",
@@ -415,19 +450,17 @@ p1 <- latitude_df %>%
        tag = "A") +
   scale_y_log10(breaks = trans_breaks("log10", function(x) 10^x),
                 labels = trans_format("log10", math_format(10^.x)))+
-  #annotate("text", x = 28, y = 10^6, hjust = 0,
-  #         label = "Latitude: p = 0.4699\nN Starvation: p << 0.0001\nLatitude\u00D7N Starvation: p = 0.4009",
-  #         family = "lmroman") +
   theme_latex(base_size = 12) +
   theme(axis.text = element_text(colour = "black"),
         panel.grid.major.x = element_blank(),
         panel.grid.major.y = element_blank(),
         plot.tag = element_text(face = 'bold'))
 
+
 #===============================================================================
-# Figure 5B: NR fluorescence across strains grouped by N-starvation treatment
+# Figure 5B: NR fluorescence across latitudes (downsampled)
 #===============================================================================
-p<- ggplot(merged_resamples, 
+p2<- ggplot(merged_resamples, 
        aes(y = mean_PE_A, x = Latitude, color = N_Starvation,
            group = interaction(N_Starvation, count))) +
   geom_line(stat="smooth",method = "lm", formula = y ~x, alpha = 0.01, se = TRUE) +
@@ -445,7 +478,29 @@ p<- ggplot(merged_resamples,
         plot.tag = element_text(face = 'bold'))
 
 
-P3 <- ggarrange(p1,p,nrow = 1, ncol = 2, common.legend = T)
-pdf("../analysis/NR fluorescence across latitudes bootstrap.pdf", height = 3.5, width = 6.5)
-P3
-dev.off() 
+P <- ggarrange(p1,p2,nrow = 1, ncol = 2, common.legend = T)
+pdf("../analysis/NR across latitudes.pdf", height = 4, width = 6.5)
+P
+dev.off()
+
+#===============================================================================
+# Figure S: NL across latitudes
+#===============================================================================
+p3 <- predict_df %>% 
+  ggplot(., aes( y = compressed_predicted_NL, x = Latitude)) +
+  geom_point(size = 2, alpha = 0.2,
+             aes(colour = N_Starvation)) +
+  geom_smooth(method = "lm", se=F, aes(color = N_Starvation),size = 0.5) +
+  labs(x = expression("Latitude ("*degree*"N)"),
+       y = expression( paste("Neutral lipid (", mu, "g ",10^-6," cells)")),
+       color = "N-starvation",
+       tag = "A") +
+  theme_latex(base_size = 12) +
+  theme(axis.text = element_text(colour = "black"),
+        panel.grid.major.x = element_blank(),
+        panel.grid.major.y = element_blank(),
+        plot.tag = element_text(face = 'bold'))
+
+pdf("../analysis/NL across latitudes.pdf", height = 4.5, width = 4.5)
+p3
+dev.off()
