@@ -103,6 +103,10 @@ require(ggpmisc)
 require(ltxplot)
 load_theme_ltx()
 
+#export linear model
+model <- lm(ug_neutral_lipids_per_million_cells ~ log10(mean_PE_A), data = df)
+saveRDS(model, file = "../data/clean/model.rds")
+
 p1 <- df %>% 
   ggscatter(data = . , y = "mean_PE_A", x = "ug_neutral_lipids_per_million_cells", 
             shape = "Strain",
@@ -262,7 +266,7 @@ p7 <- df %>%
   scale_y_continuous(labels = unit_format(unit = "K", scale = 0.001)) +
   labs(x="Neutral lipid (% dry mass)",
        y="Adjusted\nNR fluorescence",
-       tag = "F",
+       tag = "G",
        color = "N-starvation")+
   theme_latex(base_size = 10) +
   theme(axis.text = element_text(colour = "black"), 
@@ -283,7 +287,7 @@ p8 <- df %>%
   geom_point(aes(shape = Strain, color = factor(N_starvation)), size = 2) +
   labs(x="Neutral lipid (% dry mass)",
        y="NR fluorescence:blank\n(fold difference)",
-       tag = "F",
+       tag = "H",
        color = "N-starvation")+
   theme_latex(base_size = 10) +
   theme(axis.text = element_text(colour = "black"), 
