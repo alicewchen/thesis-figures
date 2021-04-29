@@ -1,5 +1,5 @@
 library(readxl)
-library(fcs2R)
+library(fcs2r)
 require(dplyr)
 library(readxl)
 library(dplyr)

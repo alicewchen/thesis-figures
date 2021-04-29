@@ -1,4 +1,4 @@
-library(fcs2R)
+library(fcs2r)
 library(ltxplot)
 library(tidyverse)
 library(dplyr)
