@@ -1,7 +1,5 @@
 library(readxl)
 library(fcs2r)
-require(dplyr)
-library(readxl)
 library(dplyr)
 library(ggplot2)
 library(scales)
